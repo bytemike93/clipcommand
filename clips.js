@@ -90,14 +90,29 @@ function logClipError(prefix, err, classification) {
       ? console.warn
       : console.error;
 
-  logMethod(`${prefix}`, {
+  const base = {
     reason: classification.reason,
     status: err?.response?.status,
-    msg: err?.response?.data?.message,
+    msg: err?.response?.data?.message
+  };
+
+  // For expected, low-severity cases (e.g., offline channel) keep the log short.
+  if (classification.logLevel === 'info') {
+    logMethod(`${prefix} ${classification.reason}`, base);
+    return;
+  }
+
+  const payload = {
+    ...base,
     full: err?.response?.data,
-    headers: err?.response?.headers,
-    stack: err?.stack
-  });
+    headers: err?.response?.headers
+  };
+
+  if (classification.logLevel === 'error') {
+    payload.stack = err?.stack;
+  }
+
+  logMethod(`${prefix}`, payload);
 }
 
 async function createClip(userId, accessToken) {

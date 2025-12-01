@@ -13,6 +13,9 @@ const PORT = process.env.PORT || 3001;
 const OAUTH_STATE_COOKIE = 'oauth_state';
 const STATE_TTL_MS = 10 * 60 * 1000;
 
+// Behind a reverse proxy (e.g., nginx/Cloudflare) we want the real client IP.
+app.set('trust proxy', true);
+
 const pendingStates = new Map();
 
 const httpClient = axios.create({
@@ -231,16 +234,28 @@ app.get('/done', (req, res) => {
     `);
 });
 
+function getClientIp(req) {
+    const cfIp = req.headers['cf-connecting-ip'];
+    if (cfIp) return cfIp;
+
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+        const first = forwardedFor.split(',')[0].trim();
+        if (first) return first;
+    }
+
+    return req.ip;
+}
+
 // z. B. max 1 Clip pro User alle 15 Sekunden
 const clipsLimiter = rateLimit({
     windowMs: 15 * 1000,
     max: 1,
     keyGenerator: (req, res) => {
-        const ip = req.headers['cf-connecting-ip'] || req.ip;
-        return ip;
+        return getClientIp(req);
     },
     handler: (req, res) => {
-        console.warn('Rate Limit ausgelöst:', req.headers['cf-connecting-ip'] || req.ip);
+        console.warn('Rate Limit ausgelöst:', getClientIp(req));
         res.status(429).send('Bitte warte 15 Sekunden, bevor du den nächsten Clip erstellst.');
     }
 });
